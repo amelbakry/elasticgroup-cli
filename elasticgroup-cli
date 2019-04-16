@@ -1,0 +1,307 @@
+#!/usr/bin/env python3.5
+
+import json
+import csv
+import os
+import sys
+import time
+import datetime
+import argparse
+import requests
+from datetime import date
+from spotinst_sdk import SpotinstClient
+from spotinst_sdk.aws_elastigroup import *
+from terminaltables import AsciiTable
+
+
+def client():
+    client = SpotinstClient()
+
+    def get_token_from_file():
+        credentials_file = os.path.isfile('~/.spotinst/credentials')
+        if credentials_file:
+            client = SpotinstClient(credentials_file='~/.spotinst/credentials', profile='default')
+
+    def get_token_from_env():
+        if 'spotinst_token' in os.environ:
+            spotinst_token = os.environ.get("spotinst_token")
+            if "account_id" in os.environ:
+                account_id = os.environ.get("account_id")
+                client = SpotinstClient(auth_token=spotinst_token, account_id=account_id)
+
+    return client
+
+
+client = client()
+groups = client.get_elastigroups()
+
+
+def print_table(func):
+    def _print(*args, **kwargs):
+
+        table_data = func(*args, **kwargs)[0]
+        func(*args, **kwargs)
+        title = func(*args, **kwargs)[1]
+        print('\033[1m' + ' %s' % title + '\033[0m')
+        table = AsciiTable(table_data)
+        print(table.table)
+    return _print
+
+
+def get_group(g):
+    for group in groups:
+        if g in group.get("name"):
+            return group.get("name")
+
+
+def get_group_id(g):
+    for group in groups:
+        if g == group.get("name"):
+            return group.get("id")
+
+
+def get_group_metadata(group):
+    id = get_group_id(group)
+    if id is None:
+        print("There is no ElasticGroup called %s" % group)
+        sys.exit()
+    else:
+        eg = client.get_elastigroup(id)
+        return eg
+
+
+@print_table
+def list_groups(check=None):
+    table_data = [["Elasticgroup Name"]]
+    title = "Elasticgroups"
+    for group in groups:
+        groupName = group.get("name")
+        if check is not None:
+            if check not in str(groupName):
+                pass
+            else:
+                table_data.append([groupName])
+        else:
+            table_data.append([groupName])
+    return table_data, title
+
+
+@print_table
+def get_scheduled_tasks(group):
+    title = "Scheduled Actions of Elasticgroup %s" % group
+    table_data = [["cron_expression", "is_enabled", "scale_min_capacity", "scale_max_capacity", "scale_target_capacity"]]
+    eg = get_group_metadata(group)
+    schedule = eg.get("scheduling")
+    if not schedule:
+        print("Elasticgroup %s does not have configured Scheduled Tasks" % group)
+        sys.exit()
+    scaling_tasks = schedule.get("tasks")
+    for n in range(len(scaling_tasks)):
+        schedule = scaling_tasks[n]
+        data = [schedule[k] for k in table_data[0] if k in schedule]
+        table_data.append(data)
+    return table_data, title
+
+
+def configure_scheduled_tasks(group, cron_expression, scale_min_capacity, scale_max_capacity, scale_target_capacity=None):
+    tasks = []
+    all_tasks = []
+    eg = get_group_metadata(group)
+    id = get_group_id(group)
+    schedule = eg.get("scheduling")
+    if schedule:
+        scaling_tasks = schedule.get("tasks")
+        for n in range(len(scaling_tasks)):
+            schedule = scaling_tasks[n]
+            schedule["task_type"] = "scale"
+            tasks.append(schedule)
+    for i in range(len(tasks)):
+        try:
+            for key, val in tasks[i].items():
+                if val == cron_expression:
+                    del tasks[i]
+        except IndexError:
+            # expected IndexErrors when deleting a task to be updated
+            continue
+    # if scale_target_capacity is None:
+    updated_task = {"task_type": "scale",
+                    "is_enabled": True,
+                    "cron_expression": cron_expression,
+                    "scale_min_capacity": scale_min_capacity,
+                    "scale_max_capacity": scale_max_capacity
+                    }
+    if scale_target_capacity is not None:
+        updated_task["scale_target_capacity"] = scale_target_capacity
+    tasks.append(updated_task)
+    for t in range(len(tasks)):
+        task = tasks[t]
+        for key, val in task.items():
+            if task.get("scale_target_capacity") is not None:
+                t = ScheduledTask(task_type='scale',
+                                  cron_expression=task["cron_expression"],
+                                  scale_target_capacity=task["scale_target_capacity"],
+                                  scale_min_capacity=task["scale_min_capacity"],
+                                  scale_max_capacity=task["scale_max_capacity"],
+                                  is_enabled=True)
+            else:
+                t = ScheduledTask(task_type='scale',
+                                  cron_expression=task["cron_expression"],
+                                  scale_min_capacity=task["scale_min_capacity"],
+                                  scale_max_capacity=task["scale_max_capacity"],
+                                  is_enabled=True)
+        all_tasks.append(t)
+    try:
+        scheduling = Scheduling(tasks=all_tasks)
+        group_update = Elastigroup(scheduling=scheduling)
+        update_result = client.update_elastigroup(group_update=group_update, group_id=id)
+        time.sleep(1)
+        print('\033[1m' + 'Scheduled Tasks of Elasticgroup %s have been configured successfully.' % group + '\033[0m')
+    except:
+        print('update result: %s' % update_result)
+
+
+@print_table
+def get_scaling_actions(group):
+    title = "Configured AutoScaling"
+    table_data = [["Type", "Properties"]]
+    eg = get_group_metadata(group)
+    scaling = eg.get("scaling")
+    if not scaling:
+        print("Elasticgroup %s does not have configured Autoscaling Actions" % group)
+        sys.exit()
+    capacity = eg.get("capacity")
+    type = ["up", "down"]
+    for t in type:
+        scale_type = scaling.get(t)
+        keys = ["policy_name", "threshold", "statistic", "namespace", "cooldown", "metric_name"]
+        properties = {}
+        for n in range(len(scale_type)):
+            scale = scale_type[n]
+            properties["Adjustment"] = scale["action"].get("adjustment")
+            values = ""
+            for key in keys:
+                if scale[key] is not None:
+                    properties[key] = scale[key]
+            for d in properties, capacity:
+                for key, value in d.items():
+                    values = values + '%s = %s' % (key.capitalize(), value) + '\n'
+            data = ["Scale" + t, values]
+            table_data.append(data)
+    return table_data, title
+
+
+@print_table
+def get_all_scheduled_tasks(check=None):
+
+    title = "Scheduled Tasks:"
+    table_data = [["group_name", "cron_expression", "scale_min_capacity",
+                   "scale_max_capacity", "scale_target_capacity"]]
+    for group in groups:
+        groupName = group.get("name")
+        if check is not None:
+            if check not in str(groupName):
+                schedule = None
+            else:
+                schedule = group.get("scheduling")
+        else:
+            schedule = group.get("scheduling")
+        if schedule is not None:
+            scaling_tasks = schedule.get("tasks")
+            if scaling_tasks is not None:
+                for n in range(len(scaling_tasks)):
+                    schedule = scaling_tasks[n]
+                    data = [schedule[k] for k in table_data[0] if k in schedule]
+                    data.insert(0, groupName)
+                    table_data.append(data)
+    return table_data, title
+
+
+def get_elasticgroup_events(group_id):
+    events = client.get_activity_events(group_id, from_date=datetime.datetime.today().strftime('%Y-%m-%d'))
+    print(events)
+
+
+def scale_elastigroup(group, min, max, target=None):
+    print('\033[1m' + ' Updating Elasticgroup %s Capacity... ' % group + '\033[0m')
+    group_id = get_group_id(group)
+    eg = get_group_metadata(group)
+    scaling = eg.get("scaling")
+    if not scaling:
+        print("Elasticgroup %s does not have configured Autoscaling Actions" % group)
+        sys.exit()
+    current_capacity = eg.get("capacity")
+    capacity = Capacity(minimum=current_capacity.get("minimum"),
+                        maximum=current_capacity.get("maximum"),
+                        target=current_capacity.get("target"),
+                        unit="instance")
+    if target is not None:
+        capacity_update = Capacity(minimum=min, maximum=max, target=target)
+    else:
+        capacity_update = Capacity(minimum=min, maximum=max)
+    group_update = Elastigroup(capacity=capacity_update)
+    try:
+        update_result = client.update_elastigroup(group_update=group_update, group_id=group_id)
+        time.sleep(1)
+        print('\033[1m' + ' Elasticgroup %s has been scaled successfully. it may takes few seconds to reflect.... ' % group + '\033[0m')
+    except:
+        print('update result: %s' % update_result)
+
+
+@print_table
+def get_instances_health(group):
+    id = get_group_id(group)
+    healthy_instances = client.get_instance_healthiness(id)
+    title = "Elasticgroup Instances healthcheck"
+    table_data = [["instance_id", "availability_zone", "life_cycle", "health_status"]]
+
+    for n in range(len(healthy_instances)):
+        instances = healthy_instances[n]
+        data = [instances[k] for k in table_data[0] if k in instances]
+        table_data.append(data)
+
+    return table_data, title
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Elasticgroup CLI")
+    parser.add_argument("-l", "--list", action='store_true', help="List all Elaticgroups")
+    parser.add_argument("-lt", "--list-tasks", dest="list_tasks", action="store_true", help="List all configured scheduled tasks")
+    parser.add_argument("--min", type=int, help="Minimum number of Instances for Autoscaling or Scheduled Scaling")
+    parser.add_argument("--max", type=int, help="Maximum number of Instances for Autoscaling or Scheduled Scaling")
+    parser.add_argument("--target", type=int, help="Desired number of Instances for Autoscaling or Scheduled Scaling")
+    parser.add_argument("--filter", type=str, default=None, help="Filter Elasticgroups")
+    parser.add_argument("--cron-expression", type=str, dest="cron_expression", help="A cron expression is a string consisting of six or seven subexpressions (fields)")
+    parser.add_argument("--instances-health", dest="health", help="List the healthcheck status of all instances in this Elasticgroup")
+    parser.add_argument("--update-autoscaling", dest="edit_scaling", help="Update pre configured Autoscaling for specific Elasticgroup")
+    parser.add_argument("--configure-scheduled-tasks", dest="edit_schedules", help="Configure Schedule Tasks for specific Elasticgroup")
+    parser.add_argument("--describe-scheduled-tasks", dest="describe_tasks", help="Describe Scheduled Tasks of specific Elasticgroup")
+    parser.add_argument("--describe-autoscaling", dest="describe_autoscaling", default="", help="Describe the configured Autoscaling for specific Elasticgroup")
+
+    args = parser.parse_args()
+
+    if args.list:
+        list_groups(args.filter)
+    if args.list_tasks:
+        print('\033[1m' + "Listing configured scheduled tasks. please wait, this may take a while.." + '\033[0m')
+        get_all_scheduled_tasks(args.filter)
+    if args.health:
+        get_instances_health(args.health)
+    if args.describe_autoscaling:
+        get_scaling_actions(args.describe_autoscaling)
+    if args.edit_scaling:
+        if len(sys.argv) < 5:
+            print("Missing Arguments. Please make Sure that you provided ElasticGroup name, min, and max")
+            sys.exit()
+        scale_elastigroup(args.edit_scaling, args.min, args.max, args.target)
+
+    if args.edit_schedules:
+        if len(sys.argv) < 6:
+            print("Missing Arguments. Please make Sure that you provided ElasticGroup name, min, max, and cron_expression")
+            sys.exit()
+        configure_scheduled_tasks(args.edit_schedules, args.cron_expression, args.min, args.max, args.target)
+    if args.describe_tasks:
+        get_scheduled_tasks(args.describe_tasks)
+
+
+if __name__ == '__main__':
+    main()
