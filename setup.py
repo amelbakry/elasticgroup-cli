@@ -11,7 +11,7 @@ requires = [
 
 setup(
 	name="elasticgroup-cli",
-	version="0.1",
+	version="0.2",
 	description="CLI for Spotinst Elasticgroups",
 	long_description=readme,
 	url="https://github.com/amelbakry/elasticgroup-cli",
@@ -28,6 +28,6 @@ setup(
 	keywords="spotinst elasticgroup spot aws",
         install_requires = requires,
         data_files=[
-          ('/usr/local/bin/elasticgroup-cli', ['./elasticgroup-cli'])
+          ('/usr/local/bin/', ['./elasticgroup-cli'])
           ]
  )

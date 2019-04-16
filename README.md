@@ -1,6 +1,6 @@
 # elasticgroup-cli
 
-elasticgroup-cli is a Command Line Interface (CLI) to interact with SpotInst API. it allows you to do some functionalities from the command line like updating autoscaling, configure schedule tasks, check Instances health, and more.
+elasticgroup-cli is a Command Line Interface (CLI) to interact with SpotInst API. it allows you to do some functions from the command line like updating autoscaling, configure schedule tasks, check Instances health, and more.
 
 #### These Functions are supported
  We plan to add support for more functions
@@ -88,7 +88,8 @@ Configure Scheduled Tasks of specific Elasticgroup
 elasticgroup-cli --configure-scheduled-tasks <Elasticgroup-Name> --cron-expression="expression" --min=x --max=x --target=x
 ```
 #### Note
-If the Cron Expression exist, the schedule will be updated, if not, the schedule will be created
+  - If the Cron Expression exist, the schedule will be updated, if not, the schedule will be created
+  - target is optional
 
 ## Examples:
 
