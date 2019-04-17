@@ -5,14 +5,14 @@ from setuptools import setup, find_packages
 readme = open('README.md').read()
 requires = [
 	"spotinst_sdk",
-	"terminaltables"
+	"terminaltables",
         "pyyaml<5"
 	]
 	
 
 setup(
 	name="elasticgroup-cli",
-	version="0.2",
+	version="0.5",
 	description="CLI for Spotinst Elasticgroups",
 	long_description=readme,
 	url="https://github.com/amelbakry/elasticgroup-cli",
