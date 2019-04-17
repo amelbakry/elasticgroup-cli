@@ -38,7 +38,7 @@ export account_id="act-xxxxx"
 #### Second:
 Install the Package
 ```bash
-pip install elasticgroup-cli
+pip3 install elasticgroup-cli
 ```
 ## Usage
 
