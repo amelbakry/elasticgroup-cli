@@ -6,6 +6,7 @@ readme = open('README.md').read()
 requires = [
 	"spotinst_sdk",
 	"terminaltables"
+        "pyyaml<5"
 	]
 	
 
