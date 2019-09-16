@@ -264,10 +264,10 @@ def get_instances_health(group):
 
 @print_table
 def get_egroup_logs(group,
-                                  from_date=YESTERDAY,
-                                  to_date=TODAY,
-                                  severity="ALL",
-                                   limit=100):
+                    from_date=YESTERDAY,
+                    to_date=TODAY,
+                    severity="ALL",
+                    limit=100):
     group_id = get_group_id(group)
     title = "Elasticgroup %s Logs" % group
     logs = client.get_elastilog(group_id=group_id, from_date=from_date, to_date=to_date,
