@@ -19,6 +19,8 @@ elasticgroup-cli is a Command Line Interface (CLI) to interact with SpotInst API
 
  :heavy_check_mark: Check Instances health
 
+ :heavy_check_mark: View Logs of ElasticGroup
+
 ## Installation:
 #### First:
 You need to configure SpotInst Credentials.you can configure the credentials by creating a file ~/.spotinst/credentials and add a profile
@@ -160,3 +162,17 @@ elasticgroup-cli --configure-scheduled-tasks <Elasticgroup-Name> --cron-expressi
 
  Scheduled Tasks of Elasticgroup cart-staging-green-80 have been configured successfully.
 ```
+
+ View Logs of specific ElasticGroup
+./elasticgroup-cli --logs authorization-live-green-26  --to-date=2019-09-12 --from-date=2019-09-11 --limit=5
+ Elasticgroup authorization-live-26 Logs
++--------------------------+----------+---------------------------------------------------------------------------------------------------------------------------------------------+
+| created_at               | severity | message                                                                                                                                     |
++--------------------------+----------+---------------------------------------------------------------------------------------------------------------------------------------------+
+| 2019-09-11T22:27:46.000Z | INFO     | Instances: [i-0ca954zzzzzzzza64317] have been detached. Reason: Scale down                                                                  |
+| 2019-09-11T22:27:45.000Z | INFO     | Instances i-0ca954cdbxxxx317 was successfully deregistered from TARGET_GROUP Load Balancer:  auth-green-26                                  |
+| 2019-09-11T22:27:41.000Z | INFO     | Instances Terminated - Autoscaling: Policy name: Scale if CPU < 20 percent for 10.0 minutes (average), Threshold: 20.0, Value observed: 1.3 |
+| 2019-09-11T22:25:41.000Z | INFO     | Instances: [i-040cxxxx367f12] have been detached. Reason: Scale down                                                                        |
+| 2019-09-11T22:25:41.000Z | INFO     | Instances i-040cxxxx2367f12 was successfully deregistered from TARGET_GROUP Load Balancer:  auth-green-26                                   |
++--------------------------+----------+---------------------------------------------------------------------------------------------------------------------------------------------+
+

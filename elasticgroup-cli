@@ -8,7 +8,7 @@ import time
 import datetime
 import argparse
 import requests
-from datetime import date
+from datetime import date, timedelta
 from spotinst_sdk import SpotinstClient
 from spotinst_sdk.aws_elastigroup import *
 from terminaltables import AsciiTable
@@ -34,7 +34,8 @@ def client():
 
 client = client()
 groups = client.get_elastigroups()
-
+TODAY = date.today().strftime('%Y-%m-%d')
+YESTERDAY = date.today() - timedelta(days=1)
 
 def print_table(func):
     def _print(*args, **kwargs):
@@ -251,7 +252,7 @@ def scale_elastigroup(group, min, max, target=None):
 def get_instances_health(group):
     id = get_group_id(group)
     healthy_instances = client.get_instance_healthiness(id)
-    title = "Elasticgroup Instances healthcheck"
+    title = "Elasticgroup %s Instances healthcheck" % group
     table_data = [["instance_id", "availability_zone", "life_cycle", "health_status"]]
 
     for n in range(len(healthy_instances)):
@@ -261,15 +262,37 @@ def get_instances_health(group):
 
     return table_data, title
 
+@print_table
+def get_egroup_logs(group,
+                                  from_date=YESTERDAY,
+                                  to_date=TODAY,
+                                  severity="ALL",
+                                   limit=100):
+    group_id = get_group_id(group)
+    title = "Elasticgroup %s Logs" % group
+    logs = client.get_elastilog(group_id=group_id, from_date=from_date, to_date=to_date,
+        severity=severity, limit=limit)
+    table_data = [["created_at", "severity", "message"]]
+    for n in range(len(logs)):
+        log = logs[n]
+        data = [log[k] for k in table_data[0] if k in log]
+        table_data.append(data)
+    return table_data, title
+
 
 def main():
     parser = argparse.ArgumentParser(description="Elasticgroup CLI")
     parser.add_argument("-l", "--list", action='store_true', help="List all Elaticgroups")
+    parser.add_argument("-lg", "--logs", help="Preview the Logs of Elaticgroup")
     parser.add_argument("-lt", "--list-tasks", dest="list_tasks", action="store_true", help="List all configured scheduled tasks")
     parser.add_argument("--min", type=int, help="Minimum number of Instances for Autoscaling or Scheduled Scaling")
     parser.add_argument("--max", type=int, help="Maximum number of Instances for Autoscaling or Scheduled Scaling")
     parser.add_argument("--target", type=int, help="Desired number of Instances for Autoscaling or Scheduled Scaling")
     parser.add_argument("--filter", type=str, default=None, help="Filter Elasticgroups")
+    parser.add_argument("--limit", type=int, help="The number of log lines to be displayed")
+    parser.add_argument("--severity", type=str, help="Severity of the logs. available are ALL, INFO, WARN, DEBUG, ERROR")
+    parser.add_argument("--from-date", type=str, default=YESTERDAY, dest="from_date", help="date in Unix format. default is yesterday")
+    parser.add_argument("--to-date", type=str, default=TODAY, dest="to_date", help="date in Unix format. default is Today")
     parser.add_argument("--cron-expression", type=str, dest="cron_expression", help="A cron expression is a string consisting of six or seven subexpressions (fields)")
     parser.add_argument("--instances-health", dest="health", help="List the healthcheck status of all instances in this Elasticgroup")
     parser.add_argument("--update-autoscaling", dest="edit_scaling", help="Update pre configured Autoscaling for specific Elasticgroup")
@@ -301,7 +324,10 @@ def main():
         configure_scheduled_tasks(args.edit_schedules, args.cron_expression, args.min, args.max, args.target)
     if args.describe_tasks:
         get_scheduled_tasks(args.describe_tasks)
+    if args.logs:
+        get_egroup_logs(args.logs, args.from_date, args.to_date, args.severity, args.limit)
 
 
 if __name__ == '__main__':
     main()
+
