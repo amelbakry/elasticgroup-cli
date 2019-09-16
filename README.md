@@ -164,6 +164,8 @@ elasticgroup-cli --configure-scheduled-tasks <Elasticgroup-Name> --cron-expressi
 ```
 
  View Logs of specific ElasticGroup
+
+```bash
 ./elasticgroup-cli --logs authorization-live-green-26  --to-date=2019-09-12 --from-date=2019-09-11 --limit=5
  Elasticgroup authorization-live-26 Logs
 +--------------------------+----------+---------------------------------------------------------------------------------------------------------------------------------------------+
@@ -175,4 +177,4 @@ elasticgroup-cli --configure-scheduled-tasks <Elasticgroup-Name> --cron-expressi
 | 2019-09-11T22:25:41.000Z | INFO     | Instances: [i-040cxxxx367f12] have been detached. Reason: Scale down                                                                        |
 | 2019-09-11T22:25:41.000Z | INFO     | Instances i-040cxxxx2367f12 was successfully deregistered from TARGET_GROUP Load Balancer:  auth-green-26                                   |
 +--------------------------+----------+---------------------------------------------------------------------------------------------------------------------------------------------+
-
+```
